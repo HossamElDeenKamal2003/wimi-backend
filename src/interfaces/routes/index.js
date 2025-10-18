@@ -1,0 +1,28 @@
+const express = require('express');
+const traderRoutes = require('./traderRoutes');
+const orderRoutes = require('./orderRoutes');
+const productRoutes = require('./productRoutes');
+const userRoutes = require('./userRouter');
+const reportsRoutes = require('./tradersReports');
+const mainScreenController = require('./mainPageRoutes');
+const fatoraRoute = require('./fatora');
+const adminRouters = require('../routes/adminRouter');
+const directPaymentRouters = require('../routes/directPayemntorders');
+const paymentOrder = require('../routes/paymentOrder');
+const sendSms = require('./smsRouter');
+require('dotenv').config();
+const router = express.Router();
+const paymentRoute = require('./payment')
+router.use('/traders', traderRoutes);
+router.use('/reports', reportsRoutes);
+router.use('/orders', orderRoutes);
+router.use('/products', productRoutes);
+router.use('/users', userRoutes);
+router.use('/main', mainScreenController);
+router.use('/admin', adminRouters);
+router.use('/payment', paymentRoute);
+router.use('/fatora', fatoraRoute);
+router.use('/direct-payment', directPaymentRouters);
+router.use('/payment-order', paymentOrder);
+router.use('/', sendSms);
+module.exports = router;
