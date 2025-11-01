@@ -8,6 +8,10 @@ const directPaymentSchema = new mongoose.Schema({
     phoneNumber: {
         type: String,
     },
+    tamaraId:{
+        type: String,
+        default: null,
+    },
     orders: [
         {
             order_id: {

@@ -57,6 +57,10 @@ class TraderController {
     async addRequestsController(req, res){
         return traderService.addRequests(req, res);
     }
+
+    async checkUserExistController(req, res){
+        return traderService.checkUserExist(req, res);
+    }
 }
 
 module.exports = new TraderController();

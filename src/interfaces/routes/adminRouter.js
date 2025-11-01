@@ -16,4 +16,7 @@ router.get('/get-wallet', (req, res)=>mainScreenController.getTradersWallets(req
 router.get('/req', (req, res)=>mainScreenController.getRequests(req, res));
 router.patch('/update-status', (req, res)=>mainScreenController.updateStatus(req, res));
 router.patch('/update-wallet', (req, res)=>mainScreenController.updateTraderWallet(req, res));
+
+router.patch('/update-verify', (req, res)=>mainScreenController.updateProductVerify(req, res));
+router.get('/get-products', (req, res)=>mainScreenController.getBlockedProducts(req, res));
 module.exports = router; 

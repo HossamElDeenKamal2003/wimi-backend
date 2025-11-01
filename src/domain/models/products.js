@@ -33,6 +33,10 @@ const productSchema = new mongoose.Schema({
     images: {
         type: [String],
     },
+    verify: {
+        type: Boolean,
+        default: false
+    },
     createdAt: {
         type: Date,
         default: Date.now

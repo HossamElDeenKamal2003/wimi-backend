@@ -1,3 +1,5 @@
+// import { createRequire } from 'module';
+// const require = createRequire(import.meta.url);
 const mongoose = require('mongoose');
 const ordersModel = require('../../domain/models/orders');
 const usersModel = require('../../domain/models/userModel');
@@ -12,9 +14,10 @@ const CryptoJS = require("crypto-js");
 const baseUrl ="https://merchants.emkanfinance.com.sa/retail/bnpl/bff/v1";
 const merchantId = "887341";
 const merchantCode = "WIM1";
+// import fetch from "node-fetch"; // لو مش مثبت في مشروعك، ثبّته بـ: npm install node-fetch
+// import directPayemntorders from '../directPayemntorders';
 const {  getMerchantConfig,
-  createBNPLOrder,
-  getBNPLOrderStatus,} = require('../../shared/emkan');
+  createBNPLOrder,getBNPLOrderStatus,} = require('../../shared/emkan');
 
 const apiKey = "3vGF1FIW9aAEjoVFQbogFzQQ7_4a";
 const apiSecret = "hj5aIYes5sd05AiL6e7_KfPMyN4a";
@@ -33,12 +36,13 @@ function addProfit(amount){
   const profit = amount * 11.5;
   return profit;
 }
-
+ 
 class FatoraService {
     async createPayment(req, res) {
         const { phoneNumber, productId, amount } = req.body;
 
         try {
+          
             if (!phoneNumber || !productId || !amount) {
                 return response.badRequest(res, 'phoneNumber, productId, and amount are required');
             }
@@ -48,7 +52,7 @@ class FatoraService {
             if (!user) {
                 return response.notFound(res, 'User not found');
             }
-            const total =  addProfit(amount);
+            const total =  amount;
             // Prepare payload
             const payload = {
                 amount: total,
@@ -59,8 +63,8 @@ class FatoraService {
                     name: `${user.firstName} ${user.lastName}`,
                 },
                 language: 'ar',
-                success_url: 'https://backendb2b.kadinabiye.com/success',
-                failure_url: 'https://backendb2b.kadinabiye.com/failure',
+                success_url: 'https://backendb2b.kadinabiye.com/fatora/payment-fatora',
+                failure_url: 'https://backendb2b.kadinabiye.com/fatora/payment-fatora',
                 save_token: false,
             };
 
@@ -111,6 +115,43 @@ class FatoraService {
         }
     }
 
+    async handlePaymentWebhook(req, res) {
+      try {
+          const { transaction_id, order_id, status, status_code, description } = req.query;
+
+          // تأكيد استلام الويبهوك
+          console.log('Webhook received:', req.query);
+
+          // تحقق من الحالة
+          if (status === 'SUCCESS' && status_code === '000') {
+              console.log(`✅ Payment successful for order: ${order_id}`);
+
+              // مثال: تحدث حالة الطلب في قاعدة البيانات
+              await ordersModel.findOneAndUpdate(
+                  { productId: order_id },
+                  { paymentStatus: 'paid', transactionId: transaction_id, description },
+                  { new: true }
+              );
+
+              return res.status(200).send('Payment success recorded');
+          } else {
+              console.log(`❌ Payment failed for order: ${order_id}`);
+
+              await ordersModel.findOneAndUpdate(
+                  { productId: order_id },
+                  { paymentStatus: 'failed', transactionId: transaction_id, description },
+                  { new: true }
+              );
+
+              return res.status(200).send('Payment failure recorded');
+          }
+
+      } catch (error) {
+          console.error('Webhook Error:', error);
+          return res.status(500).send('Server error');
+      }
+    }
+
     async paymentFailure(req, res) {
         const { order_id } = req.query;
         try {
@@ -124,118 +165,267 @@ class FatoraService {
         }
     }
 
-    // ##################### Tamara #######################
-    async createTamara(req, res) {
-    const traderId = req.user?.id;
-    const { orderId, total, disription } = req.body; // orderId = order_id بتاع الـ subdocument
+}
 
-    try {
-        // 1. نلاقي الـ DirectPayment document اللي فيه الـ order
-        const directPayment = await DirectPayment.findOne({_id: orderId});
-        console.log("directPayment : ", directPayment);
-        const phoneNumber = directPayment.orders[0].phoneNumber;
-        console.log("phoneNumber : ", phoneNumber);
-        const user = await usersModel.findOne({ phoneNumber: phoneNumber });
-        const username = user.username;
-        if (!directPayment) {
-        return response.notFound(res, "الطلب مش موجود أو مش بتاعك");
-        }
 
-        // 2. نجيب الـ order نفسه من الـ array
-        const order = directPayment
-        if (!order) {
-        return response.notFound(res, "الطلب مش موجود");
-        }
-        const total2 = addProfit(total);
-        const payload = {
-            "shipping_address": {
-            "first_name": username,
-            "last_name": "User",
-            "line1": "King Fahd Road",
-            "line2": "Olaya District",
-            "region": "Riyadh",
-            "postal_code": "11564",
-            "city": "Riyadh",
-            "country_code": "SA"
-            },
-        
+class TamaraService{
+   async createTamara(req, res) {
+      const traderId = req.user?.id;
+      const { orderId, total, disription } = req.body; // orderId = order_id بتاع الـ subdocument
 
-        total_amount: {
-            amount: total2,
-            currency: "SAR",
-        },
-        shipping_amount: { amount: 0, currency: "SAR" },
-        tax_amount: { amount: 0, currency: "SAR" },
-        order_reference_id: order._id,
-        order_number: order._id,
-        items: [
-            {
-            name: disription || "Payment Information",
-            type: "Physical",
-            sku: "SKU-" + order._id, // 👈 لازم
-            reference_id: order._id,
-            quantity: 1,
-            unit_price: {
-                amount: total,
-                currency: "SAR",
-            },
-            total_amount: {
-                amount: total,
-                currency: "SAR",
-            },
-            },
-        ],
-        consumer: {
-            email: req.user?.email || "demo@email.com",
-            first_name: req.user?.firstName || "Demo",
-            last_name: req.user?.lastName || "User",
-            phone_number: phoneNumber || "+966500000000",
-        },
-        country_code: "SA",
-        description: disription,
-        merchant_url: {
-            cancel: "https://backendb2b.kadinabiye.compayment/cancel",
-            failure: "https://backendb2b.kadinabiye.com/payment/failure",
-            success: "https://backendb2b.kadinabiye.com/payment/success",
-            notification: "https://backendb2b.kadinabiye.com/payment/tamara/webhook",
-        },
-        payment_type: "PAY_BY_INSTALMENTS",
-        instalments: 3,
-        platform: "ScarFace Platform",
-        is_mobile: false,
-        locale: "en_US",
-        };
+      try {
+          if(!orderId || !total){
+          return response.badRequest(res, "orderId و total مطلوبين");
+          }
+          // 1. نلاقي الـ DirectPayment document اللي فيه الـ order
+          const directPayment = await DirectPayment.findOne({_id: orderId});
+          console.log("directPayment : ", directPayment);
+          const phoneNumber = directPayment.orders[0].phoneNumber;
+          console.log("phoneNumber : ", phoneNumber);
+          const user = await usersModel.findOne({ phoneNumber: phoneNumber });
+          const username = user.username;
+          if (!directPayment) {
+          return response.notFound(res, "الطلب مش موجود أو مش بتاعك");
+          }
 
-        // 4. نبعت لـ Tamara
-        const tamaraResponse = await axios.post(
-        "https://api-sandbox.tamara.co/checkout",
-        payload,
-        {
-            headers: {
+          // 2. نجيب الـ order نفسه من الـ array
+          const order = directPayment
+          if (!order) {
+          return response.notFound(res, "الطلب مش موجود");
+          }
+          const total2 = addProfit(total);
+          const payload = {
+              "shipping_address": { 
+              "first_name": username,
+              "last_name": "User", 
+              "line1": "King Fahd Road",
+              "line2": "Olaya District",
+              "region": "Riyadh",
+              "postal_code": "11564",
+              "city": "Riyadh",
+              "country_code": "SA"
+              },
+          
+
+          total_amount: {
+              amount: total,
+              currency: "SAR",
+          },
+          shipping_amount: { amount: 0, currency: "SAR" },
+          tax_amount: { amount: 0, currency: "SAR" },
+          order_reference_id: order._id,
+          order_number: order._id,
+          items: [
+              {
+              name: disription || "Payment Information",
+              type: "Physical",
+              sku: "SKU-" + order._id, 
+              reference_id: order._id,
+              quantity: 1,
+              unit_price: {
+                  amount: total,
+                  currency: "SAR",
+              },
+              total_amount: {
+                  amount: total,
+                  currency: "SAR",
+              },
+              },
+          ],
+          consumer: {
+              email: req.user?.email || "demo@email.com",
+              first_name: req.user?.firstName || "Demo",
+              last_name: req.user?.lastName || "User",
+              phone_number: phoneNumber || "+966500000000",
+          },
+          country_code: "SA",
+          description: disription,
+          merchant_url: {
+              cancel: "https://backendb2b.kadinabiye.com/payment/cancel",
+              failure: "https://backendb2b.kadinabiye.com/payment/failure",
+              success: "https://backendb2b.kadinabiye.com/payment/success",
+              notification: "https://backendb2b.kadinabiye.com/payment/notification",
+          },
+          payment_type: "PAY_BY_INSTALMENTS",
+          instalments: 3,
+          platform: "ScarFace Platform",
+          is_mobile: false,
+          locale: "en_US",
+          };
+
+          // 4. نبعت لـ Tamara
+          const tamaraResponse = await axios.post(
+          "https://api-sandbox.tamara.co/checkout",
+          payload,
+          {
+              headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${tamara}`,
+              },
+          }
+          );
+
+          // 5. نحدث حالة الـ order ونضيف checkoutUrl
+          order.status = "pending_payment";
+          order.tamaraId = tamaraResponse.data.order_id;
+          order.checkoutUrl = tamaraResponse.data.checkout_url; // لازم تزود field في الـ schema
+          await directPayment.save();
+
+          return response.success(res, {
+          message: "تم إنشاء دفع عبر Tamara",
+          checkoutUrl: tamaraResponse.data.checkout_url,
+          data: tamaraResponse.data,
+          });
+      } catch (error) {
+          console.error("Tamara API Error:", error.response?.data || error.message);
+          return response.serverError(res, error.response?.data || error.message);
+      }
+    }
+    async captureOrder(order_id, amount, currency = "SAR") {
+      try {
+        const response = await fetch(`https://sandbox.tamara.co/payments/capture`, {
+          method: "POST",
+          headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${tamara}`,
-            },
-        }
-        );
-
-        // 5. نحدث حالة الـ order ونضيف checkoutUrl
-        order.status = "pending_payment";
-        order.checkoutUrl = tamaraResponse.data.checkout_url; // لازم تزود field في الـ schema
-        await directPayment.save();
-
-        return response.success(res, {
-        message: "تم إنشاء دفع عبر Tamara",
-        checkoutUrl: tamaraResponse.data.checkout_url,
-        data: tamaraResponse.data,
+            "Authorization": `Bearer ${tamara}`
+          },
+          body: JSON.stringify({
+            order_id,
+            capture_id: crypto.randomUUID(),
+            amount: { amount, currency }
+          })
         });
-    } catch (error) {
-        console.error("Tamara API Error:", error.response?.data || error.message);
-        return response.serverError(res, error.response?.data || error.message);
-    }
+        const order = await DirectPayment.findOne({ tamaraId: order_id });
+        const price = order.orders.filter(item=>item.status = "captured");
+        const data = await response.json();
+        console.log("✅ Tamara Capture response:", data);
+        return data;
+      } catch (error) {
+        console.error("❌ Tamara Capture error:", error);
+      }
     }
 
-    // ############################# Emkan #############################
-    async createEmkanOrder(req, res) {
+    async authoriseOrder(order_id) {
+      try {
+        const response = await fetch(`https://sandbox.tamara.co/orders/${order_id}/authorise`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${tamara}`,
+          },
+        });
+        const order = await DirectPayment.findOne({ tamaraId: order_id });
+        order.orders.filter(item=>item.status = "authorized");
+        await order.save();
+        const data = await response.json();
+        console.log("✅ Tamara Authorise response:", data);
+        return data;
+      } catch (error) {
+        console.error("❌ Tamara Authorise error:", error);
+        return { status: "failed", error: error.message };
+      }
+    }
+
+   async tamaraWebhookAuthorized(req, res) {
+    try {
+      const { order_id, status } = req.body;
+      if (!order_id) {
+        return res.status(400).json({ success: false, message: "Missing order_id" });
+      }
+
+      console.log("📦 Webhook received from Tamara:", status, order_id);
+
+      // نحاول نجيب الطلب من DirectPayment أولاً
+      let order = await DirectPayment.findOne({ tamaraId: order_id });
+
+      // لو مش موجود في DirectPayment، نحاول نجيبه من OrdersModel
+      if (!order) {
+        // const OrdersModel = require("../../domain/models/orders");
+        order = await ordersModel.findOne({ tamaraId: order_id });
+      }
+
+      // لو برضه مش لاقيه في أي مكان
+      if (!order) {
+        console.log("⚠️ Order not found in both DirectPayment and OrdersModel");
+        return res.status(404).json({ success: false, message: "Order not found" });
+      }
+
+      // لو الحالة Approved
+      if (status === "approved") {
+        // تحديث حالة العناصر داخل الطلب
+        order.orders?.forEach(item => (item.status = "approved"));
+
+        const price = order.orders?.reduce((total, item) => total + (item.price || 0), 0) || 0;
+
+        console.log("✅ Approved webhook detected, calling Authorise API...");
+
+        const authResponse = await this.authoriseOrder(order_id);
+
+        if (authResponse.status === "authorised") {
+          await this.captureOrder(order_id, price, "SAR");
+        }
+
+        // استدعاء Tamara Authorise API
+        const response = await fetch(`https://sandbox.tamara.co/orders/${order_id}/authorise`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${tamara}`,
+          },
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          console.error("❌ Authorise API Error:", data);
+          return res.status(response.status).json({ success: false, error: data });
+        }
+
+        console.log("✅ Tamara Authorise response:", data);
+
+        // لو auto_captured = false → نعمل capture يدوي
+        if (data.auto_captured === false) {
+          console.log("⚠️ Order not auto-captured, capturing manually...");
+          const captureRes = await fetch(`https://sandbox.tamara.co/payments/capture`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${tamara}`,
+            },
+            body: JSON.stringify({
+              order_id: order_id,
+              amount: data.authorized_amount?.[0]?.amount,
+              currency: data.authorized_amount?.[0]?.currency,
+            }),
+          });
+
+          const captureData = await captureRes.json();
+          console.log("💰 Tamara Capture response:", captureData);
+        }
+
+        // حفظ التحديث في قاعدة البيانات
+        await order.save();
+
+        return res.status(200).json({
+          success: true,
+          message: "Order authorised successfully",
+          data,
+        });
+      }
+
+      // لو مش Approved
+      console.log("⚪ Ignored non-approved webhook:", status);
+      return res.status(200).json({ message: "Ignored non-approved status" });
+
+    } catch (error) {
+      console.error("🔥 Tamara Authorise error:", error);
+      return res.status(500).json({ success: false, error: error.message });
+    }
+  }
+}
+
+class EmkanService {
+   async createEmkanOrder(req, res) {
     try {
       const { orderId, total, phoneNumber } = req.body;
 
@@ -261,7 +451,7 @@ class FatoraService {
         merchantId,
         merchantCode,
         aggregatorId: 'AGGREGATOR112',
-        billAmount: Number(total2),
+        billAmount: Number(total),
         mobileNumber: `966${phoneNumber.replace(/^0+/, '')}`,
         successRedirectionUrl: 'https://backendb2b.kadinabiye.com/emkan/success',
         failureRedirectionUrl: 'hhttps://backendb2b.kadinabiye.com/emkan/failure',
@@ -294,21 +484,28 @@ class FatoraService {
     }
 
   // ✅ تابع لجلب حالة الطلب بناءً على orderId
-  async getEmkanOrderStatus(req, res) {
-    try {
-      const { orderId } = req.params;
-      const merchantId = '887341';
-      const orderStatus = await getBNPLOrderStatus(orderId, merchantId);
-      return response.success(res, {
-        message: 'حالة الطلب من إمكان',
-        data: orderStatus,
-      });
-    } catch (err) {
-      return response.serverError(res, {
-        message: err.response?.data?.description || err.message,
-      });
+    async getEmkanOrderStatus(req, res) {
+      try {
+        const { orderId } = req.params;
+        const merchantId = '887341';
+        const orderStatus = await getBNPLOrderStatus(orderId, merchantId);
+        return response.success(res, {
+          message: 'حالة الطلب من إمكان',
+          data: orderStatus,
+        });
+      } catch (err) {
+        return response.serverError(res, {
+          message: err.response?.data?.description || err.message,
+        });
+      }
     }
-  }
-
 }
-module.exports = new FatoraService();
+const fatora = new FatoraService();
+const tamaraPay = new TamaraService();
+const emkan = new EmkanService();
+
+module.exports = {
+  fatora,
+  emkan,
+  tamaraPay
+}

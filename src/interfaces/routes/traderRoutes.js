@@ -31,4 +31,5 @@ router.get('/get-orders', decodeToken, traderController.getMyDirectOrdersControl
 router.get('/get-trader', decodeToken, traderController.getTraderDataController);
 router.get('/get-wallet', decodeToken, traderController.getWalletController);
 router.post('/add-req', decodeToken, traderController.addRequestsController);
+router.post('/checkUserExist', traderController.checkUserExistController);
 module.exports = router;
