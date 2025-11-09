@@ -212,6 +212,7 @@ class FatoraService {
 
         // 5. نحدث حالة الـ order ونضيف checkoutUrl
         order.status = "Pending";
+        order.tamaraId = tamaraResponse.data.order_id;
         order.checkoutUrl = tamaraResponse.data.checkout_url; // لازم تزود field في الـ schema
         await order.save();
 

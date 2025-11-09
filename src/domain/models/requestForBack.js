@@ -1,10 +1,12 @@
 const mongoose = require('mongoose');
 const requestSchema = new mongoose.Schema({
     traderId: {
-        type: mongoose.Types.ObjectId
+        type: mongoose.Types.ObjectId,
+        ref: 'Trader'
     },
     userId: {
-        type: mongoose.Types.ObjectId
+        type: mongoose.Types.ObjectId,
+        ref: 'User'
     },
     userPhoneNumber: {
         type: String

@@ -41,6 +41,17 @@ class MainScreenPage {
         }
     }
 
+    async filterByCategory(req, res){
+        const { category } = req.body;
+        try{
+            const filteredProducts = await products.find({ category: category }).populate('traderId', 'firstName lastName email phoneNumber');
+            return response.success(res, filteredProducts);
+        }catch(error){
+            console.log(error);
+            return response.serverError(res, error.message)
+        }
+    }
+
     async searchByName(req, res) {
         const userId = req.user?.id;
         const { text } = req.body;

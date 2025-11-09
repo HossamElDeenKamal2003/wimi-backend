@@ -584,6 +584,20 @@ class TraderService {
             return response.serverError(res, error.message);
         }
     }
+
+    async checkUserExist(req, res){
+        const { phoneNumber } = req.body;;
+        try{
+            const user = await users.findOne({ phoneNumber });
+            if(!user){
+                return response.badRequest(res, "User not Found");
+            }
+            return response.success(res, user);
+        }catch(error){
+            console.log(error);;
+            return response.serverError(res, error.message);
+        }
+    }
 }
 
 module.exports = new TraderService();

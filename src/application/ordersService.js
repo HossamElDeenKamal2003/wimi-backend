@@ -6,33 +6,59 @@ const response = require('../shared/sharedResponse');
 class OrderService {
     async addOrder(req, res) {
         const userId = req.user?.id;
-        const { productId, quantity, totalPrice } = req.body;
+        const { products } = req.body;
+
         try {
-            const product = await productsModel.findOne({ _id: productId }).select('traderId').lean();
-            if (!productId) {
-                return response.badRequest(res, 'Product ID is required');
+            // Validate
+            if (!products || !Array.isArray(products) || products.length === 0) {
+            return response.badRequest(res, "Products array is required");
             }
 
-            if (!product) {
-                console.log(productId);
-                return response.notFound(res, 'Product not found');
-            }
-            const traderId = product.traderId;
-            const orderData = { ...req.body, userId, traderId, quantity, totalPrice };
+            // Fetch traderId for each product and validate
+            const productDetails = await Promise.all(
+            products.map(async (item) => {
+                const product = await productsModel.findById(item.productId).select("traderId").lean();
+                if (!product) {
+                throw new Error(`Product not found with ID: ${item.productId}`);
+                }
+                return {
+                productId: item.productId,
+                quantity: item.quantity,
+                price: item.price,
+                traderId: product.traderId,
+                };
+            })
+            );
+
+            // Calculate total price automatically
+            const totalPrice = productDetails.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+
+            // Prepare order data
+            const orderData = {
+            userId,
+            products: productDetails,
+            totalPrice,
+            status: "Pending", // optional field if your model supports it
+            createdAt: new Date(),
+            };
+
+            // Save the new order
             const newOrder = new Orders(orderData);
             await newOrder.save();
-            response.success(res, newOrder, 'Order created', 201);
-            const cartItem = await listShopping.findOneAndDelete({ userId, productId });
-            if(cartItem){
-                console.log("Item Deleted Successfully From Cart Shopping");
-            }else{
-                console.log("Error While Deleting The Item From List Shopping");
-            }
-        } catch (error) {
-            return response.serverError(res, error.message);
-        }  
-    }
 
+            // Remove products from shopping cart after successful order
+            const productIds = products.map(p => p.productId);
+            await listShopping.deleteMany({ userId, productId: { $in: productIds } });
+
+            console.log("🛒 Cart items deleted successfully after order creation.");
+
+            return response.success(res, newOrder, "Order created successfully", 201);
+
+        } catch (error) {
+            console.error("❌ Error while adding order:", error.message);
+            return response.serverError(res, error.message);
+        }
+    }
 
     async updateOrder(req, res) {
         const userId = req.user?.id;
@@ -59,6 +85,22 @@ class OrderService {
             await order.deleteOne();
             return response.success(res, null, 'Order deleted');
         } catch (error) {
+            return response.serverError(res, error.message);
+        }
+    }
+
+    async getOrders(req, res){
+        const userId = req.user?.id;
+        try{
+            const orders = await Orders.find().populate('products.productId products.traderId');
+            console.log("orders : ", orders);
+            console.log("id : ", userId)
+            // const filteredOrders = orders.filter(order =>
+            //     order.products.some(product => product.traderId.toString() === userId)
+            // );         
+            return response.success(res, orders)
+        }catch(error){
+            console.log(error);
             return response.serverError(res, error.message);
         }
     }

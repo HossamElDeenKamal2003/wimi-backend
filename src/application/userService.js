@@ -271,24 +271,26 @@ class UserService {
     async listCardShopping(req, res) {
         const userId = req.user.id;
         try {
-            // enum: ['Pending', 'Shipped', 'Delivered', 'Cancelled'],
             const [cartItems, userOrders] = await Promise.all([
-                listShopping.find({ userId }).populate('productId'),
-                orders.find({ 
+            listShopping.find({ userId }).populate('productId'),
+            orders.find({ 
                 userId, 
                 status: { $in: ['Pending', 'Shipped', 'Delivered'] } 
-                }).populate('productId')
+            }).populate('products.productId')
             ]);
+
             const products = cartItems.map(item => item.productId);
+
             return response.success(res, {
-                cart: products,
-                orders: userOrders,
-                cartLength: products.length
+            cart: products,
+            orders: userOrders,
+            cartLength: products.length
             }, 'Fetched shopping cart and orders successfully');
         } catch (error) {
             return response.serverError(res, error.message);
         }
-    }
+     }
+
 
     async cancellOrder(req, res){
         const userId = req.user.id;

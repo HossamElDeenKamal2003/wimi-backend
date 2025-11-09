@@ -292,7 +292,7 @@ class adminService {
 
     async getRequests( req, res){
         try{
-            const req = await requestModel.find().lean();
+            const req = await requestModel.find().populate('userId traderId');
             return response.success(res, req);
         }catch(error){
             console.log(error);
@@ -386,6 +386,34 @@ class adminService {
 
         } catch (error) {
             console.error(error);
+            return response.serverError(res, error.message);
+        }
+    }
+
+    async getBlockedProducts(req, res){
+        try{
+            const Products = await products.find({ verify: false });
+            return response.success(res, Products);
+        }catch(error){
+            console.log(error);
+            return response.serverError(res, error.message);
+        }
+    }
+
+    async updateProductVerify(req, res){
+        const { productId } = req.body;
+        try{
+            const updateVerify = await products.findOneAndUpdate(
+                { _id: productId },
+                { verify: true },
+                { new: true }
+            );
+            if(!updateVerify){
+                return response.badRequest(res, "Failed to update Verify for this product");
+            }
+            return response.success(res, updateVerify, "Verify updated successfullly");
+        }catch(error){
+            connsole.log(error);
             return response.serverError(res, error.message);
         }
     }
