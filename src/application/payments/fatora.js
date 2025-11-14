@@ -7,7 +7,7 @@
   const productsModel = require('../../domain/models/products');
   const response = require("../../shared/sharedResponse");
   const DirectPayment = require('../../domain/models/directPaymentModel');
-  const tamara = "eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJhY2NvdW50SWQiOiIwODllMWZhOC02NWUxLTRjMzgtOWE4OC0zMTNjYzgwNjdhNDUiLCJ0eXBlIjoibWVyY2hhbnQiLCJzYWx0IjoiYzFmMGRlYjI4ZjY2MWRlYmJjZjhiMDdiNzgzZjE1NzQiLCJyb2xlcyI6WyJST0xFX01FUkNIQU5UIl0sImlhdCI6MTc1NzUzNTg4MiwiaXNzIjoiVGFtYXJhIn0.nFFoRg1Nu73uGE2UK2P9n3SvIkxqyx6Tf7t91zHJHahbTZrgG0e0rY_RiUlud55V8M2MBHf4b670IzAH5H6zTYpfO-LXThujZCy59WM77lthZRC7NDljxN3313PepjZRNYXmN5T51NRsutCP8Pp9RZbjsL34OV71XQvik9Mb890LXowAmQJtGvzg-_dV-ICm8QKSGFqDyZqMaRDp3BxOku7xBC7_7g1eFvS7UcBYmJtlurS69g6Kwg830oT27Uy1ZoW9aPJZwtJxlJTY43H9OHdp3BddBme5VO1Ixkg7eX7nguo27S0a8jIsFL2h46PXkf0VxSDZ_KpxaU51L3Uksw"
+  const tamara = "eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJhY2NvdW50SWQiOiJkYzE2ZTVhNC1jNTc1LTQwYjUtYWQ1YS03NmI1NTk5NTM1YmQiLCJ0eXBlIjoibWVyY2hhbnQiLCJzYWx0IjoiMjFiODk4MGMtNjEzMC00M2QxLTg2ZmUtYmIwNzUxZDdjZDFlIiwicm9sZXMiOlsiUk9MRV9NRVJDSEFOVCJdLCJpc010bHMiOmZhbHNlLCJpYXQiOjE3NjAwOTg4OTAsImlzcyI6IlRhbWFyYSBQUCJ9.wR30jMizLl_UMsgwSvzyTD92BfCv3gNPod2N0-beFbjwwq_GbvKQQ1FmtbchVL5drVviqWFp1mod5qUp-4MTfK2uJgOAhudEQSEhS6-F5mJ8wM0mfGT47E3oS-zrtL4Y1WJBaRIgytFNk0B8L1TQrrFHcg48we1bhbb6nLEfP0W_F7_aqJw9xDLRyyoDLAzKEskV4kfaCWbejMHe5QJjFvAgx_3prRdC-22_fpPNDi506XODoZ9DC4rSBBIhjOknV--8SZuXF4rjZOiqzpN2Rk6PrM4s62_PDNFbJdcjvVPggrWGTXRwk3VNxdmxMYW-eqcjQ4ngsOum9SUtNj3QpA"
   const axios = require('axios');
   // const tamara = "eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJhY2NvdW50SWQiOiJkYzE2ZTVhNC1jNTc1LTQwYjUtYWQ1YS03NmI1NTk5NTM1YmQiLCJ0eXBlIjoibWVyY2hhbnQiLCJzYWx0IjoiMjFiODk4MGMtNjEzMC00M2QxLTg2ZmUtYmIwNzUxZDdjZDFlIiwicm9sZXMiOlsiUk9MRV9NRVJDSEFOVCJdLCJpc010bHMiOmZhbHNlLCJpYXQiOjE3NjAwOTg4OTAsImlzcyI6IlRhbWFyYSBQUCJ9.wR30jMizLl_UMsgwSvzyTD92BfCv3gNPod2N0-beFbjwwq_GbvKQQ1FmtbchVL5drVviqWFp1mod5qUp-4MTfK2uJgOAhudEQSEhS6-F5mJ8wM0mfGT47E3oS-zrtL4Y1WJBaRIgytFNk0B8L1TQrrFHcg48we1bhbb6nLEfP0W_F7_aqJw9xDLRyyoDLAzKEskV4kfaCWbejMHe5QJjFvAgx_3prRdC-22_fpPNDi506XODoZ9DC4rSBBIhjOknV--8SZuXF4rjZOiqzpN2Rk6PrM4s62_PDNFbJdcjvVPggrWGTXRwk3VNxdmxMYW-eqcjQ4ngsOum9SUtNj3QpA"
   const CryptoJS = require("crypto-js");
@@ -115,42 +115,74 @@
           }
       }
 
-      async handlePaymentWebhook(req, res) {
-        try {
-            const { transaction_id, order_id, status, status_code, description } = req.query;
+    async handlePaymentWebhook(req, res) {
+  try {
+    const { transaction_id, order_id, status, status_code, description } = req.query;
+    console.log('Webhook received:', req.query);
 
-            // تأكيد استلام الويبهوك
-            console.log('Webhook received:', req.query);
+    // Try normal order first
+    let order = await ordersModel.findOne({ _id: order_id });
 
-            // تحقق من الحالة
-            if (status === 'SUCCESS' && status_code === '000') {
-                console.log(`✅ Payment successful for order: ${order_id}`);
+    if(order) {
+      const total = order.products.reduce((sum, p) => sum + p.price, 0);
 
-                // مثال: تحدث حالة الطلب في قاعدة البيانات
-                await ordersModel.findOneAndUpdate(
-                    { productId: order_id },
-                    { paymentStatus: 'paid', transactionId: transaction_id, description },
-                    { new: true }
-                );
+      if (status === 'SUCCESS' && status_code === '000') {
+        console.log(`✅ Payment successful for order: ${order_id}`);
 
-                return res.status(200).send('Payment success recorded');
-            } else {
-                console.log(`❌ Payment failed for order: ${order_id}`);
+        const traderId = order.products[0].traderId;
+        const traderWallet = await trader.findOne({ _id: traderId });
+        traderWallet.wallet += total;
+        await traderWallet.save();
 
-                await ordersModel.findOneAndUpdate(
-                    { productId: order_id },
-                    { paymentStatus: 'failed', transactionId: transaction_id, description },
-                    { new: true }
-                );
+        await ordersModel.findOneAndUpdate(
+          { _id: order_id },
+          { paymentStatus: 'completed', transactionId: transaction_id, description },
+          { new: true }
+        );
 
-                return res.status(200).send('Payment failure recorded');
-            }
+        return res.status(200).send('Payment success recorded');
+      } else {
+        console.log(`❌ Payment failed for order: ${order_id}`);
 
-        } catch (error) {
-            console.error('Webhook Error:', error);
-            return res.status(500).send('Server error');
-        }
+        await ordersModel.findOneAndUpdate(
+          { _id: order_id },
+          { paymentStatus: 'failed', transactionId: transaction_id, description },
+          { new: true }
+        );
+
+        return res.status(200).send('Payment failure recorded');
       }
+
+    } else {
+      // Direct order
+      let directOrder = await DirectPayment.findOne({ _id: order_id });
+      if(!directOrder) return res.status(404).send('Order not found');
+
+      const total = directOrder.orders.reduce((sum, p) => sum + p.price, 0);
+
+      if (status === 'SUCCESS' && status_code === '000') {
+        const traderWallet = await trader.findOne({ _id: directOrder.traderId });
+        traderWallet.wallet += total;
+        await traderWallet.save();
+
+        directOrder.orders = directOrder.orders.map(item => ({ ...item, status: 'completed' }));
+        await directOrder.save();
+
+        return res.status(200).send('Direct payment success recorded');
+      } else {
+        directOrder.orders = directOrder.orders.map(item => ({ ...item, status: 'failed' }));
+        await directOrder.save();
+
+        return res.status(200).send('Direct payment failed');
+      }
+    }
+
+  } catch (error) {
+    console.error('Webhook Error:', error);
+    return res.status(500).send('Server error');
+  }
+}
+
 
       async paymentFailure(req, res) {
           const { order_id } = req.query;
@@ -170,7 +202,7 @@
   class TamaraService{
     async createTamara(req, res) {
         const traderId = req.user?.id;
-        const { orderId, total, disription } = req.body; // orderId = order_id بتاع الـ subdocument
+        const { orderId, total, disription } = req.body; 
 
         try {
             if(!orderId || !total){
@@ -254,7 +286,7 @@
 
             // 4. نبعت لـ Tamara
             const tamaraResponse = await axios.post(
-            "https://api-sandbox.tamara.co/checkout",
+            "https://api.tamara.co/checkout",
             payload,
             {
                 headers: {
@@ -264,7 +296,6 @@
             }
             );
 
-            // 5. نحدث حالة الـ order ونضيف checkoutUrl
             order.status = "pending_payment";
             order.tamaraId = tamaraResponse.data.order_id;
             order.checkoutUrl = tamaraResponse.data.checkout_url; // لازم تزود field في الـ schema
@@ -318,7 +349,7 @@
           }
 
           // إرسال الطلب إلى Tamara لتفعيله (Authorise)
-          const response = await fetch(`https://api-sandbox.tamara.co/orders/${order_id}/authorise`, {
+          const response = await fetch(`https://api.tamara.co/orders/${order_id}/authorise`, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
@@ -420,7 +451,7 @@ async tamaraWebhookAuthorized(req, res) {
         }
 
         // Capture API call
-        const captureRes = await fetch(`https://api-sandbox.tamara.co/payments/capture`, {
+        const captureRes = await fetch(`https://api.tamara.co/payments/capture`, {
           method: "POST",
           headers: {
             "Authorization": `Bearer ${tamara}`, // تأكد إن المتغير موجود

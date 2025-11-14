@@ -7,6 +7,7 @@ const directPaymentSchema = new mongoose.Schema({
     },
     phoneNumber: {
         type: String,
+        ref: 'User'
     },
     tamaraId:{
         type: String,

@@ -17,7 +17,7 @@ const requestSchema = new mongoose.Schema({
     status: {
         type: String
     }
-});
+}, { timestamps: true });
 
 const requestModel = mongoose.model('back', requestSchema);
 module.exports = requestModel;

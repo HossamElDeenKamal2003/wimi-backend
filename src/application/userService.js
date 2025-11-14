@@ -333,7 +333,7 @@ class UserService {
     async getMyNotification(req, res){
             const userId = req.user.id;
             try{
-                const notifications = await notificationModel.find({userId: userId});
+                const notifications = await notificationModel.find({userId: userId}).sort({ createdAt: -1 });
                 return response.success(res, notifications);
             }catch(error){
                 console.log(error)

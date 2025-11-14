@@ -4,6 +4,7 @@ const products = require('../domain/models/products');
 const orders = require('../domain/models/orders');
 const response = require("../shared/sharedResponse");
 const mongoose = require("mongoose");
+const directPayemntorders = require('../domain/models/directPaymentModel');
 const notificationModel = require('../domain/models/notification');
 const BlockedTraders = require('../domain/models/blockedTraders');
 const trader = require('../domain/models/trader');
@@ -44,8 +45,20 @@ class adminService {
             const skip = (page - 1) * limit;
             const totalUsers = await users.countDocuments();
             const totalTraders = await traders.countDocuments();
-            const usersList = await users.find().select('-password').skip(skip).limit(limit);
-            const tradersList = await traders.find().select('-password').skip(skip).limit(limit);
+            const usersList = await users
+                .find()
+                .select('-password')
+                .sort({ createdAt: -1 })
+                .skip(skip)
+                .limit(limit);
+
+                const tradersList = await traders
+                .find()
+                .select('-password')
+                .sort({ createdAt: -1 })
+                .skip(skip)
+                .limit(limit);
+
             return response.success(res, {
                 users: usersList,
                 traders: tradersList,
@@ -114,7 +127,7 @@ class adminService {
             const skip = (page - 1) * limit;
 
             const [waitingTraders, totalCount] = await Promise.all([
-                traders.find({ waiting: true }).limit(limit).skip(skip).lean(),
+                traders.find({ waiting: true }).sort({ createdAt: -1 }).limit(limit).skip(skip).lean(),
                 traders.countDocuments({ waiting: true })
             ]);
 
@@ -279,7 +292,7 @@ class adminService {
 
     async getTradersWallets(req, res){
         try{
-            const tradersWallets = await traders.find().lean().select("wallet phoneNumber firstName lastName Iban nationalId address googleMapLink email");
+            const tradersWallets = await traders.find().sort({ createdAt: -1 }).lean().select("wallet phoneNumber firstName lastName Iban nationalId address googleMapLink email");
             if(!tradersWallets){
                 return response.notFound(res, "Traders Not Found");
             }
@@ -292,7 +305,11 @@ class adminService {
 
     async getRequests( req, res){
         try{
-            const req = await requestModel.find().populate('userId traderId');
+            const req = await requestModel
+                .find()
+                .sort({ createdAt: -1 })
+                .populate("userId traderId")
+                .lean();
             return response.success(res, req);
         }catch(error){
             console.log(error);
@@ -417,6 +434,39 @@ class adminService {
             return response.serverError(res, error.message);
         }
     }
+
+    async getOrders(req, res) {
+        try {
+            const allOrders = await orders.find().sort({ orderDate: -1 }).populate('products.traderId');
+            const directOrders = await directPayemntorders.find().sort({ createdAt: -1 }).populate('traderId phoneNumber');
+
+            return response.success(res, { allOrders, directOrders });
+        } catch (error) {
+            console.error(error);
+            return response.serverError(res, error.message);
+        }
+    }
+
+   async adminLogin(req, res) {
+        const { username, password } = req.body;
+
+        try {
+            if (!username || !password) {
+            return response.badRequest(res, "Username and password are required");
+            }
+
+            if (username !== "wimisa" || password !== "wimi2005@@") {
+            return response.badRequest(res, "Invalid username or password");
+            }
+
+            return response.success(res, "Login successful");
+        } catch (error) {
+            console.error(error);
+            return response.serverError(res, error.message);
+        }
+    }
+
+
 }
 
 module.exports = adminService;

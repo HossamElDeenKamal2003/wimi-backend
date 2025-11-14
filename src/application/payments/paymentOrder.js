@@ -3,7 +3,7 @@ const ordersModel = require('../../domain/models/orders');
 const usersModel = require('../../domain/models/userModel');
 const trader = require('../../domain/models/trader');
 const response = require("../../shared/sharedResponse");
-const tamara = "eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJhY2NvdW50SWQiOiIwODllMWZhOC02NWUxLTRjMzgtOWE4OC0zMTNjYzgwNjdhNDUiLCJ0eXBlIjoibWVyY2hhbnQiLCJzYWx0IjoiYzFmMGRlYjI4ZjY2MWRlYmJjZjhiMDdiNzgzZjE1NzQiLCJyb2xlcyI6WyJST0xFX01FUkNIQU5UIl0sImlhdCI6MTc1NzUzNTg4MiwiaXNzIjoiVGFtYXJhIn0.nFFoRg1Nu73uGE2UK2P9n3SvIkxqyx6Tf7t91zHJHahbTZrgG0e0rY_RiUlud55V8M2MBHf4b670IzAH5H6zTYpfO-LXThujZCy59WM77lthZRC7NDljxN3313PepjZRNYXmN5T51NRsutCP8Pp9RZbjsL34OV71XQvik9Mb890LXowAmQJtGvzg-_dV-ICm8QKSGFqDyZqMaRDp3BxOku7xBC7_7g1eFvS7UcBYmJtlurS69g6Kwg830oT27Uy1ZoW9aPJZwtJxlJTY43H9OHdp3BddBme5VO1Ixkg7eX7nguo27S0a8jIsFL2h46PXkf0VxSDZ_KpxaU51L3Uksw"
+const tamara = "eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJhY2NvdW50SWQiOiJkYzE2ZTVhNC1jNTc1LTQwYjUtYWQ1YS03NmI1NTk5NTM1YmQiLCJ0eXBlIjoibWVyY2hhbnQiLCJzYWx0IjoiMjFiODk4MGMtNjEzMC00M2QxLTg2ZmUtYmIwNzUxZDdjZDFlIiwicm9sZXMiOlsiUk9MRV9NRVJDSEFOVCJdLCJpc010bHMiOmZhbHNlLCJpYXQiOjE3NjAwOTg4OTAsImlzcyI6IlRhbWFyYSBQUCJ9.wR30jMizLl_UMsgwSvzyTD92BfCv3gNPod2N0-beFbjwwq_GbvKQQ1FmtbchVL5drVviqWFp1mod5qUp-4MTfK2uJgOAhudEQSEhS6-F5mJ8wM0mfGT47E3oS-zrtL4Y1WJBaRIgytFNk0B8L1TQrrFHcg48we1bhbb6nLEfP0W_F7_aqJw9xDLRyyoDLAzKEskV4kfaCWbejMHe5QJjFvAgx_3prRdC-22_fpPNDi506XODoZ9DC4rSBBIhjOknV--8SZuXF4rjZOiqzpN2Rk6PrM4s62_PDNFbJdcjvVPggrWGTXRwk3VNxdmxMYW-eqcjQ4ngsOum9SUtNj3QpA"
 // const tamara = "eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJhY2NvdW50SWQiOiJkYzE2ZTVhNC1jNTc1LTQwYjUtYWQ1YS03NmI1NTk5NTM1YmQiLCJ0eXBlIjoibWVyY2hhbnQiLCJzYWx0IjoiMjFiODk4MGMtNjEzMC00M2QxLTg2ZmUtYmIwNzUxZDdjZDFlIiwicm9sZXMiOlsiUk9MRV9NRVJDSEFOVCJdLCJpc010bHMiOmZhbHNlLCJpYXQiOjE3NjAwOTg4OTAsImlzcyI6IlRhbWFyYSBQUCJ9.wR30jMizLl_UMsgwSvzyTD92BfCv3gNPod2N0-beFbjwwq_GbvKQQ1FmtbchVL5drVviqWFp1mod5qUp-4MTfK2uJgOAhudEQSEhS6-F5mJ8wM0mfGT47E3oS-zrtL4Y1WJBaRIgytFNk0B8L1TQrrFHcg48we1bhbb6nLEfP0W_F7_aqJw9xDLRyyoDLAzKEskV4kfaCWbejMHe5QJjFvAgx_3prRdC-22_fpPNDi506XODoZ9DC4rSBBIhjOknV--8SZuXF4rjZOiqzpN2Rk6PrM4s62_PDNFbJdcjvVPggrWGTXRwk3VNxdmxMYW-eqcjQ4ngsOum9SUtNj3QpA"
 
 const axios = require('axios');
@@ -25,54 +25,56 @@ function generateSignature(body) {
 }
 class FatoraService {
     async createPayment(req, res) {
-        const { phoneNumber, productId, amount } = req.body;
+          const { phoneNumber, productId, amount } = req.body;
 
-        try {
-            if (!phoneNumber || !productId || !amount) {
-                return response.badRequest(res, 'phoneNumber, productId, and amount are required');
-            }
+          try {
+            
+              if (!phoneNumber || !productId || !amount) {
+                  return response.badRequest(res, 'phoneNumber, productId, and amount are required');
+              }
 
-            // Get user info
-            const user = await usersModel.findOne({ phoneNumber: phoneNumber });
-            if (!user) {
-                return response.notFound(res, 'User not found');
-            }
+              // Get user info
+              const user = await usersModel.findOne({ phoneNumber: phoneNumber });
+              if (!user) {
+                  return response.notFound(res, 'User not found');
+              }
+              const total =  amount;
+              // Prepare payload
+              const payload = {
+                  amount: total,
+                  currency: 'SAR',
+                  order_id: productId,
+                  client: {
+                      phone: phoneNumber,
+                      name: `${user.firstName} ${user.lastName}`,
+                  },
+                  language: 'ar',
+                  success_url: 'https://backendb2b.kadinabiye.com/fatora/payment-fatora',
+                  failure_url: 'https://backendb2b.kadinabiye.com/fatora/payment-fatora',
+                  save_token: false,
+              };
 
-            // Prepare payload
-            const payload = {
-                amount: amount,
-                currency: 'SAR',
-                order_id: productId,
-                client: {
-                    phone: phoneNumber,
-                    name: `${user.firstName} ${user.lastName}`,
-                },
-                language: 'ar',
-                success_url: 'https://backendb2b.kadinabiye.com/success',
-                failure_url: 'https://backendb2b.kadinabiye.com/failure',
-                save_token: true,
-            };
+              // Call Fatora API
+              const fatoraResponse = await axios.post(
+                  'https://api.fatora.io/v1/payments/checkout',
+                  payload,
+                  {
+                      headers: {
+                          'Content-Type': 'application/json',
+                          'api_key': '13db6c0f-5428-4510-a0a3-a12f70964c8a'
+                      }
+                  }
+              );
 
-            // Call Fatora API
-            const fatoraResponse = await axios.post(
-                'https://api.fatora.io/v1/payments/checkout',
-                payload,
-                {
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'api_key': 'E4B73FEE-F492-4607-A38D-852B0EBC91C9'
-                    }
-                }
-            );
+              // Return success
+              return response.success(res, fatoraResponse.data);
 
-            // Return success
-            return response.success(res, fatoraResponse.data);
+          } catch (error) {
+              console.error("Fatora API Error:", error.response?.data || error.message);
+              return response.serverError(res, error.response?.data || error.message);
+          }
+      }
 
-        } catch (error) {
-            console.error("Fatora API Error:", error.response?.data || error.message);
-            return response.serverError(res, error.response?.data || error.message);
-        }
-    }
 
     async paymentSuccess(req, res) {
         const { order_id } = req.query;
@@ -200,7 +202,7 @@ class FatoraService {
 
         // 4. نبعت لـ Tamara
         const tamaraResponse = await axios.post(
-        "https://api-sandbox.tamara.co/checkout",
+        "https://api.tamara.co/checkout",
         payload,
         {
             headers: {

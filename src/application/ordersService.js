@@ -92,7 +92,7 @@ class OrderService {
     async getOrders(req, res){
         const userId = req.user?.id;
         try{
-            const orders = await Orders.find().populate('products.productId products.traderId');
+            const orders = await Orders.find().sort({ createdAt: -1 }).populate('products.productId products.traderId');
             console.log("orders : ", orders);
             console.log("id : ", userId)
             // const filteredOrders = orders.filter(order =>
