@@ -273,6 +273,8 @@ class FatoraService {
       // ✅ 4. إنشاء الطلب عن طريق Emkan
       const orderResponse = await createBNPLOrder(payload);
       console.log('✅ BNPL Order Created:', orderResponse);
+        const order = await ordersModel.findOne({ _id: id });
+        order.emkanId = orderResponse.orderId;
       return response.success(res, {
         message: 'تم إنشاء طلب إمكان بنجاح',
         data: orderResponse,

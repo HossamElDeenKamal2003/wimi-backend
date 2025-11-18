@@ -20,4 +20,5 @@ router.get('/get-orders', (req, res) => mainScreenController.getOrders(req, res)
 router.patch('/update-verify', (req, res)=>mainScreenController.updateProductVerify(req, res));
 router.get('/get-products', (req, res)=>mainScreenController.getBlockedProducts(req, res));
 router.post('/login', (req, res)=>mainScreenController.adminLogin(req, res));
+router.patch('/updatTraderData', (req, res)=>mainScreenController.updatTraderData(req, res));
 module.exports = router; 

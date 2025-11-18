@@ -21,6 +21,13 @@ app.get('/', (req, res) => {
     res.send('Server is running!');
 });
 
+app.get('/emkan/success', async(req, res)=>{
+  res.status(200).send("Sucess Payment");
+})
+
+app.get('/emkan/failure', async(req, res)=>{
+  res.status(200).send("Failed Payment");
+})
 
 
 app.use('/', routes);
@@ -41,31 +48,72 @@ app.get("/payment/success", async (req, res) => {
     const { orderId, paymentStatus } = req.query;
     console.log("✅ Payment Successful:", { orderId, paymentStatus });
 
+    let redirectOrderId = null;
+
+    // ابحث في Orders
     let order = await Orders.findOne({ tamaraId: orderId });
     if (order) {
       order.paymentState = "Completed";
       await order.save();
+      redirectOrderId = order._id;
       console.log("💾 Updated normal order paymentState to Completed");
     } else {
-      // لو مش موجود في Orders نحاول نجيبه من DirectPayment
+      // ابحث في DirectPayment
       const directPaymentOrder = await DirectPayment.findOne({ tamaraId: orderId });
       if (directPaymentOrder) {
         directPaymentOrder.orders.forEach((item) => (item.status = "completed"));
         await directPaymentOrder.save();
+        redirectOrderId = directPaymentOrder._id;
         console.log("💾 Updated DirectPayment order status to completed");
       } else {
         console.log("⚠️ Order not found in both models");
       }
     }
 
-    // رد للمستخدم
-    res.send(`✅ Payment Successful !`);
+    if (!redirectOrderId) {
+      return res.send("⚠️ Payment successful, but order not found.");
+    }
+
+    // صفحة تعرض رسالة ثم Redirect تلقائي
+    res.send(`
+      <html>
+        <head>
+          <meta charset="UTF-8" />
+          <title>Payment Success</title>
+          <meta http-equiv="refresh" content="2;url=https://wimi.sa/checkout-payment/${redirectOrderId}" />
+          <style>
+            body { 
+              font-family: Arial; 
+              background: #f6fff8; 
+              text-align: center; 
+              padding-top: 80px;
+            }
+            .box {
+              display: inline-block;
+              padding: 20px 30px;
+              border-radius: 10px;
+              background: #e6ffed;
+              border: 1px solid #b6f2c9;
+              color: #059669;
+              font-size: 18px;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="box">
+            ✅ تم الدفع بنجاح<br/>
+            سيتم إعادتك للطلب خلال ثانيتين...
+          </div>
+        </body>
+      </html>
+    `);
 
   } catch (error) {
     console.error("🔥 Error in /payment/success:", error.response?.data || error.message);
     res.status(500).send("❌ Error while handling payment success.");
   }
 });
+
 const tamara = "eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJhY2NvdW50SWQiOiJkYzE2ZTVhNC1jNTc1LTQwYjUtYWQ1YS03NmI1NTk5NTM1YmQiLCJ0eXBlIjoibWVyY2hhbnQiLCJzYWx0IjoiMjFiODk4MGMtNjEzMC00M2QxLTg2ZmUtYmIwNzUxZDdjZDFlIiwicm9sZXMiOlsiUk9MRV9NRVJDSEFOVCJdLCJpc010bHMiOmZhbHNlLCJpYXQiOjE3NjAwOTg4OTAsImlzcyI6IlRhbWFyYSBQUCJ9.wR30jMizLl_UMsgwSvzyTD92BfCv3gNPod2N0-beFbjwwq_GbvKQQ1FmtbchVL5drVviqWFp1mod5qUp-4MTfK2uJgOAhudEQSEhS6-F5mJ8wM0mfGT47E3oS-zrtL4Y1WJBaRIgytFNk0B8L1TQrrFHcg48we1bhbb6nLEfP0W_F7_aqJw9xDLRyyoDLAzKEskV4kfaCWbejMHe5QJjFvAgx_3prRdC-22_fpPNDi506XODoZ9DC4rSBBIhjOknV--8SZuXF4rjZOiqzpN2Rk6PrM4s62_PDNFbJdcjvVPggrWGTXRwk3VNxdmxMYW-eqcjQ4ngsOum9SUtNj3QpA"
 
 
@@ -187,75 +235,75 @@ app.post('/payment/notification', async (req, res) => {
       }
     );
 
+    if (!tamaraResponse.data || !tamaraResponse.data.authorized_amount) {
+      throw new Error("Tamara authorization failed");
+    }
+
     console.log("✅ Tamara authorization response:", tamaraResponse.data.authorized_amount.amount);
-    console.log("orderId : ", tamaraResponse.data.order_id)
+
     const authorizedAmount = Number(tamaraResponse.data.authorized_amount.amount);
 
     // Step 2: Try to find the order in your DB
     let order = await Orders.findOne({ _id: order_reference_id });
-    let walletUpdated = false; // <-- FLAG لمنع مضاعفة المحفظة
 
     if (order) {
-      console.log("order : ", order)
-      const traderId = order.products[0].traderId;
-      const traderWallet = await trader.findOne({ _id: traderId });
-      const total = order.products.reduce((sum, p) => sum + p.price, 0);
+      // Update only if payment not completed yet
+      if (order.paymentState !== "completed") {
+        const traderId = order.products[0].traderId;
+        const traderWallet = await trader.findOne({ _id: traderId });
+        const total = order.products.reduce((sum, p) => sum + p.price, 0);
 
-      if (!walletUpdated) {
-        traderWallet.wallet += total; // زيادة المحفظة مرة واحدة فقط
+        traderWallet.wallet += total; // زيادة المحفظة مرة واحدة
         await traderWallet.save();
-        walletUpdated = true;
+
+        order.paymentState = "completed";
+        await order.save();
+
+        // Capture payment
+        const payload = {
+          order_id: tamaraResponse.data.order_id,
+          total_amount: {
+            amount: authorizedAmount,
+            currency: "SAR"
+          }
+        };
+
+        const captureRes = await axios.post(
+          'https://api.tamara.co/payments/capture',
+          payload,
+          {
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${tamara}`,
+            },
+          }
+        );
+
+        console.log("💰 Payment capture response:", captureRes.data);
+        console.log("💾 Updated main order to 'Completed'");
+      } else {
+        console.log("⚠️ Order already completed, skipping wallet update and capture");
       }
-
-      order.paymentState = "Completed";
-      await order.save();
-
-      const payload = {
-        order_id: tamaraResponse.data.order_id,
-        total_amount: {
-          amount: authorizedAmount,
-          currency: "SAR"
-        }
-      };
-
-      console.log("Capture request payload:", JSON.stringify(payload, null, 2));
-
-      const captureRes = await axios.post(
-        'https://api.tamara.co/payments/capture',
-        payload,
-        {
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${tamara}`,
-          },
-        }
-      );
-
-      console.log("💰 Payment capture response:", captureRes.data);
-      console.log("💾 Updated main order to 'Completed'");
     } else {
-      // Step 3: Try direct payment
+      // Step 3: Handle DirectPayment similarly
       const directOrder = await DirectPayment.findOne({ _id: order_reference_id });
-      const total = directOrder.orders.reduce((sum, p) => sum + p.price, 0);
 
-      if (directOrder) { 
-        console.log(directOrder)
+      if (directOrder && !directOrder.isCompleted) {
+        const total = directOrder.orders.reduce((sum, p) => sum + p.price, 0);
+        const traderId = directOrder.traderId;
+        const traderWallet = await trader.findOne({ _id: traderId });
+
+        traderWallet.wallet += total;
+        await traderWallet.save();
+
         directOrder.orders = directOrder.orders.map(item => ({
           ...item,
           status: "completed"
         }));
-        const traderId = directOrder.traderId;
-        const traderWallet = await trader.findOne({ _id: traderId });
-
-        if (!walletUpdated) {
-          traderWallet.wallet += total; // زيادة المحفظة مرة واحدة فقط
-          await traderWallet.save();
-          walletUpdated = true;
-        }
-
+        directOrder.isCompleted = true;
         await directOrder.save();
 
-        const captureRes = await axios.post(
+        await axios.post(
           'https://api.tamara.co/payments/capture',
           {
             order_id: tamaraResponse.data.order_id,
@@ -272,10 +320,9 @@ app.post('/payment/notification', async (req, res) => {
           }
         );
 
-        console.log("💰 Payment capture response:", captureRes.data);
         console.log("💾 Updated direct order to 'Completed'");
       } else {
-        console.warn("⚠️ No matching order found for reference:", order_reference_id);
+        console.warn("⚠️ No matching order found or already completed:", order_reference_id);
       }
     }
 
@@ -286,10 +333,7 @@ app.post('/payment/notification', async (req, res) => {
     });
 
   } catch (error) {
-    console.log(error)
     console.error("❌ Tamara Webhook Error:", error.response?.data || error.message);
-
-    // Always respond with 200 (Tamara expects acknowledgment)
     return res.status(200).json({
       success: false,
       message: error.response?.data || error.message
@@ -297,12 +341,144 @@ app.post('/payment/notification', async (req, res) => {
   }
 });
 
-// ✅ عند إلغاء الدفع
-app.get("/payment/cancel", (req, res) => {
-  const { orderId, paymentStatus } = req.query;
-  console.log("❌ Payment Canceled:", { orderId, paymentStatus });
-  res.send("❌ Payment was canceled by the user.");
+
+
+app.post('/emkan/callback', async(req, res)=>{
+  const data = req.body;
+  console.log("Emkan callback body:", data);
+
+  let walletUpdated = false;
+
+  try {
+    const orderId = data.orderCode;
+
+    // البحث في Orders
+    const order = await Orders.findOne({ emkanId: orderId });
+
+    if(data.eventCode === 'DOWN_PAYMENT_SUCCESS' || data.eventCode === 'SUCCESS') {
+
+      if(order) {
+        const traderId = order.products[0].traderId;
+        const traderWallet = await trader.findById(traderId);
+        const total = order.products.reduce((sum, p) => sum + p.price, 0);
+
+        if (!walletUpdated) {
+          traderWallet.wallet += total;
+          await traderWallet.save();
+          walletUpdated = true;
+        }
+
+        order.paymentState = "Completed";
+        await order.save();
+
+      } else {
+        // البحث في DirectPayment
+        const directOrder = await DirectPayment.findOne({ emaknId: orderId });
+        if(directOrder) {
+          const total = directOrder.orders.reduce((sum, p) => sum + p.price, 0);
+          directOrder.orders = directOrder.orders.map(item => ({ ...item, status: "completed" }));
+
+          const traderId = directOrder.traderId;
+          const traderWallet = await trader.findById(traderId);
+
+          if (!walletUpdated) {
+            traderWallet.wallet += total;
+            await traderWallet.save();
+            walletUpdated = true;
+          }
+
+          await directOrder.save();
+        }
+      }
+    }
+
+    return res.status(200).send("Callback processed");
+
+  } catch(error) {
+    console.log(error);
+    return res.status(500).json({ message: error.message });
+  }
 });
+
+
+
+
+// ✅ عند إلغاء الدفع
+app.get("/payment/cancel", async (req, res) => {
+  try {
+    const { orderId, paymentStatus } = req.query;
+
+    console.log("❌ Payment Canceled:", { orderId, paymentStatus });
+
+    // ابحث في Orders
+    let order = await Orders.findOne({ tamaraId: orderId }).select("_id");
+
+    // لو مش موجود ابحث في DirectPayment
+    if (!order) {
+      order = await DirectPayment.findOne({ tamaraId: orderId }).select("_id");
+    }
+
+    if (!order) {
+      return res.status(404).send("Order not found");
+    }
+
+    // صفحة تعرض رسالة للمستخدم ثم تعمل إعادة توجيه تلقائي
+    res.send(`
+      <html>
+        <head>
+          <meta charset="UTF-8" />
+          <title>Payment Canceled</title>
+          <meta http-equiv="refresh" content="2;url=https://wimi.sa/checkout-payment/${order._id}" />
+          <style>
+            body { 
+              font-family: Arial; 
+              background: #fafafa; 
+              text-align: center; 
+              padding-top: 80px;
+            }
+            .box {
+              display: inline-block;
+              padding: 20px 30px;
+              border-radius: 10px;
+              background: #fff5f5;
+              border: 1px solid #ffcccc;
+              color: #cc0000;
+              font-size: 18px;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="box">
+            ❌ لقد قمت بإلغاء عملية الدفع<br/>
+            سيتم إعادتك لصفحة الدفع خلال ثانيتين...
+          </div>
+        </body>
+      </html>
+    `);
+
+  } catch (error) {
+    console.error("Cancel Error:", error);
+    res.status(500).send("Server error");
+  }
+});
+
+app.get('/tr', async (req, res) => {
+  try {
+    const docs = await DirectPayment.find({ traderId: "6918997108619a362c433094" });
+
+    // اجمع كل الـ orders من كل document
+    const allOrders = docs.flatMap(doc => doc.orders || []);
+    console.log(allOrders.length )
+    // فلترة orders المكتملة
+    const ordersCompleted = allOrders.filter(item => item.status === 'completed');
+
+    res.status(200).json({ orders: ordersCompleted });
+
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 
 // ✅ عند فشل الدفع
 app.get("/payment/failure", (req, res) => {

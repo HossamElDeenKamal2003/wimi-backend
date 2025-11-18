@@ -8,5 +8,6 @@ router.post('/create-payment', (req, res) => fatoraController.createPayment(req,
 router.post('/tamara', (req, res)=>tamaraController.createTamara(req, res));
 router.get('/auth',(req, res)=>tamaraController.tamaraWebhookAuthorized(req, res));
 router.post('/emkan', (req, res)=>emkanController.createEmkanOrder(req, res));
-router.post('/payment-fatora', (req, res) => fatoraController.handlePaymentWebhook(req, res));
+router.get('/payment-fatora', (req, res) => fatoraController.handlePaymentWebhook(req, res));
+router.get('/payment-fail', (req, res)=>fatoraController.failFatora(req, res));
 module.exports = router;

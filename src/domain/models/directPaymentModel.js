@@ -13,6 +13,10 @@ const directPaymentSchema = new mongoose.Schema({
         type: String,
         default: null,
     },
+    emkanId: {
+        type: String,
+        default: ""
+    },
     orders: [
         {
             order_id: {

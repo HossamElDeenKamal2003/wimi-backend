@@ -466,6 +466,50 @@ class adminService {
         }
     }
 
+    async updatTraderData(req, res) {
+    try {
+        const { data } = req.body;
+
+        // التحقق من وجود الداتا والـ ID
+        if (!data || !data._id) {
+            return response.badRequest(res, "معرّف التاجر مفقود");
+        }
+
+        const traderId = data._id;
+
+        // إنشاء نسخة نظيفة من البيانات
+        const fieldsToUpdate = { ...data };
+
+        // 🔒 منع تعديل أي حقول حسّاسة
+        delete fieldsToUpdate._id;
+        delete fieldsToUpdate.password;
+        delete fieldsToUpdate.balance;
+        delete fieldsToUpdate.role;
+        delete fieldsToUpdate.createdAt;
+        delete fieldsToUpdate.updatedAt;
+        delete fieldsToUpdate.__v;
+
+        // تحديث التاجر
+        const updatedTrader = await trader.findByIdAndUpdate(
+            traderId,
+            { $set: fieldsToUpdate },
+            { new: true } // يرجع النسخة الجديدة بعد التعديل
+        );
+
+        if (!updatedTrader) {
+            return response.notFound(res, "التاجر غير موجود");
+        }
+
+        return response.success(res, updatedTrader, "تم تحديث بيانات التاجر بنجاح");
+
+    } catch (error) {
+        console.log(error);
+        return response.serverError(res, error.message);
+    }
+}
+
+
+
 
 }
 

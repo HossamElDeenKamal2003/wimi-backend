@@ -18,6 +18,7 @@
   // import directPayemntorders from '../directPayemntorders';
   const {  getMerchantConfig,
     createBNPLOrder,getBNPLOrderStatus,} = require('../../shared/emkan');
+const directPayemntorders = require('../directPayemntorders');
 
   const apiKey = "3vGF1FIW9aAEjoVFQbogFzQQ7_4a";
   const apiSecret = "hj5aIYes5sd05AiL6e7_KfPMyN4a";
@@ -64,7 +65,7 @@
                   },
                   language: 'ar',
                   success_url: 'https://backendb2b.kadinabiye.com/fatora/payment-fatora',
-                  failure_url: 'https://backendb2b.kadinabiye.com/fatora/payment-fatora',
+                  failure_url: 'https://backendb2b.kadinabiye.com/fatora/payment-fail',
                   save_token: false,
               };
 
@@ -88,6 +89,66 @@
               return response.serverError(res, error.response?.data || error.message);
           }
       }
+      
+
+     async failFatora(req, res) {
+  const { order_id } = req.query;
+
+  try {
+    console.log("❌ Fatora Payment Failed:", order_id);
+
+    // ابحث في الطلبات العادية
+    let order = await ordersModel.findOne({ _id: order_id }).select("_id");
+
+    // لو ملقيناش، ابحث في الطلب المباشر
+    if (!order) {
+      order = await DirectPayment.findOne({ _id: order_id }).select("_id");
+    } 
+
+    // لو لسه ملقتش أي طلب
+    if (!order) {
+      return res.status(404).send("Order not found");
+    }
+
+    // صفحة تعرض رسالة للمستخدم ثم تعمل إعادة توجيه تلقائي
+    return res.send(`
+      <html>
+        <head>
+          <meta charset="UTF-8" />
+          <title>Payment Failed</title>
+          <meta http-equiv="refresh" content="2;url=https://wimi.sa/checkout-payment/${order._id}" />
+          <style>
+            body { 
+              font-family: Arial; 
+              background: #fafafa; 
+              text-align: center; 
+              padding-top: 80px;
+            }
+            .box {
+              display: inline-block;
+              padding: 20px 30px;
+              border-radius: 10px;
+              background: #fff5f5;
+              border: 1px solid #ffcccc;
+              color: #cc0000;
+              font-size: 18px;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="box">
+            ❌ لقد فشلت عملية الدفع عبر فاتورة<br/>
+            سيتم إعادتك لصفحة الدفع خلال ثانيتين...
+          </div>
+        </body>
+      </html>
+    `);
+
+  } catch (error) {
+    console.log(error);
+    return response.serverError(res, error.message);
+  }
+}
 
       async paymentSuccess(req, res) {
           const { order_id } = req.query;
@@ -115,73 +176,102 @@
           }
       }
 
-    async handlePaymentWebhook(req, res) {
+async handlePaymentWebhook(req, res) {
   try {
     const { transaction_id, order_id, status, status_code, description } = req.query;
-    console.log('Webhook received:', req.query);
+    console.log('Payment callback received:', req.query);
 
-    // Try normal order first
+    // نبحث أولاً في الطلبات العادية
     let order = await ordersModel.findOne({ _id: order_id });
 
     if(order) {
       const total = order.products.reduce((sum, p) => sum + p.price, 0);
+      const traderId = order.products[0].traderId;
+      const traderWallet = await trader.findOne({ _id: traderId });
 
       if (status === 'SUCCESS' && status_code === '000') {
-        console.log(`✅ Payment successful for order: ${order_id}`);
-
-        const traderId = order.products[0].traderId;
-        const traderWallet = await trader.findOne({ _id: traderId });
+        // تحديث الدفع ناجح
         traderWallet.wallet += total;
         await traderWallet.save();
+        await ordersModel.findByIdAndUpdate(order_id, { paymentStatus: 'completed', transactionId: transaction_id, description });
 
-        await ordersModel.findOneAndUpdate(
-          { _id: order_id },
-          { paymentStatus: 'completed', transactionId: transaction_id, description },
-          { new: true }
-        );
-
-        return res.status(200).send('Payment success recorded');
+        // توجيه المستخدم
+        return res.send(`
+          <html>
+            <head>
+              <meta http-equiv="refresh" content="2;url=https://wimi.sa/checkout-payment/${order_id}" />
+            </head>
+            <body>
+              ✅ Payment successful! Redirecting...
+            </body>
+          </html>
+        `);
       } else {
-        console.log(`❌ Payment failed for order: ${order_id}`);
+        // الدفع فشل
+        await ordersModel.findByIdAndUpdate(order_id, { paymentStatus: 'failed', transactionId: transaction_id, description });
 
-        await ordersModel.findOneAndUpdate(
-          { _id: order_id },
-          { paymentStatus: 'failed', transactionId: transaction_id, description },
-          { new: true }
-        );
-
-        return res.status(200).send('Payment failure recorded');
+        return res.send(`
+          <html>
+            <head>
+              <meta http-equiv="refresh" content="2;url=https://wimi.sa/checkout-payment/${order_id}" />
+            </head>
+            <body>
+              ❌ Payment failed! Redirecting...
+            </body>
+          </html>
+        `);
       }
 
     } else {
-      // Direct order
+      // الطلب المباشر
       let directOrder = await DirectPayment.findOne({ _id: order_id });
       if(!directOrder) return res.status(404).send('Order not found');
 
       const total = directOrder.orders.reduce((sum, p) => sum + p.price, 0);
+      const traderWallet = await trader.findOne({ _id: directOrder.traderId });
 
       if (status === 'SUCCESS' && status_code === '000') {
-        const traderWallet = await trader.findOne({ _id: directOrder.traderId });
+        // الدفع ناجح
         traderWallet.wallet += total;
         await traderWallet.save();
 
         directOrder.orders = directOrder.orders.map(item => ({ ...item, status: 'completed' }));
         await directOrder.save();
 
-        return res.status(200).send('Direct payment success recorded');
+        return res.send(`
+          <html>
+            <head>
+              <meta http-equiv="refresh" content="2;url=https://wimi.sa/checkout-success/${order_id}" />
+            </head>
+            <body>
+              ✅ Payment successful! Redirecting...
+            </body>
+          </html>
+        `);
       } else {
-        directOrder.orders = directOrder.orders.map(item => ({ ...item, status: 'failed' }));
-        await directOrder.save();
+        // الدفع فشل
+        // directOrder.orders = directOrder.orders.map(item => ({ ...item, status: 'failed' }));
+        // await directOrder.save();
 
-        return res.status(200).send('Direct payment failed');
+        return res.send(`
+          <html>
+            <head>
+              <meta http-equiv="refresh" content="2;url=https://wimi.sa/checkout-payment/${order_id}" />
+            </head>
+            <body>
+              ❌ Payment failed! Redirecting...
+            </body>
+          </html>
+        `);
       }
     }
 
   } catch (error) {
-    console.error('Webhook Error:', error);
+    console.error('Payment Success Handler Error:', error);
     return res.status(500).send('Server error');
   }
 }
+
 
 
       async paymentFailure(req, res) {
@@ -549,6 +639,11 @@ async tamaraWebhookAuthorized(req, res) {
 
         // ✅ 4. إنشاء الطلب عن طريق Emkan
         const orderResponse = await createBNPLOrder(payload);
+        console.log(orderResponse);
+        const order = await DirectPayment.findOne({ _id: orderId });
+        console.log(order);
+        order.emkanId = orderResponse.orderId;
+        await order.save();
         console.log('✅ BNPL Order Created:', orderResponse);
         return response.success(res, {
           message: 'تم إنشاء طلب إمكان بنجاح',

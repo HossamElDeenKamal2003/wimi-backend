@@ -383,7 +383,7 @@ class TraderService {
                 await newUser.save();
 
                 // ✅ إرسال رسالة تحتوي على اسم التاجر
-                await sendOtp(
+                await sendSms(
                     phoneNumber,
                     `👋 عميل منصة ويمي أهلاً بك!
                 تم إنشاء حساب جديد لك بواسطة التاجر: ${traderFullName}.
@@ -441,7 +441,7 @@ class TraderService {
         await newUser.save();
 
         // 📲 Send password via WhatsApp
-        await sendOtp(phoneNumber, `🔑 Your account has been created!\nYour password is: *${plainPassword}*`);
+        await sendSms(phoneNumber, `🔑 Your account has been created!\nYour password is: *${plainPassword}*`);
 
         return response.success(res, { userId: newUser._id }, "User created successfully");
     } catch (error) {

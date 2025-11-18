@@ -10,6 +10,10 @@ const orderSchema = new mongoose.Schema({
     type: String,
     default: null,
   },
+  emaknId: {
+      type: String,
+      default: null
+  },
   products: [  // ✅ changed this from productId to products
     {
       productId: {
